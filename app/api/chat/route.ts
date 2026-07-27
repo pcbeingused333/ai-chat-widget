@@ -2,13 +2,24 @@ import { business } from "@/lib/business";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
+const CORS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function json(body: unknown, status = 200) {
+  return Response.json(body, { status, headers: CORS });
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
 export async function POST(req: Request) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return Response.json(
-      { error: "The chatbot isn't configured yet (missing GROQ_API_KEY)." },
-      { status: 500 }
-    );
+    return json({ error: "The chatbot isn't configured yet (missing GROQ_API_KEY)." }, 500);
   }
 
   let messages: ChatMessage[];
@@ -16,10 +27,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     messages = Array.isArray(body?.messages) ? body.messages : [];
   } catch {
-    return Response.json({ error: "Invalid request." }, { status: 400 });
+    return json({ error: "Invalid request." }, 400);
   }
 
-  // Keep only the last few turns to stay light and fast.
   const recent = messages.slice(-8).map((m) => ({ role: m.role, content: m.content }));
 
   try {
@@ -38,7 +48,7 @@ export async function POST(req: Request) {
     });
 
     if (!res.ok) {
-      return Response.json({ error: "The assistant is unavailable right now." }, { status: 502 });
+      return json({ error: "The assistant is unavailable right now." }, 502);
     }
 
     const data = await res.json();
@@ -46,8 +56,8 @@ export async function POST(req: Request) {
       data?.choices?.[0]?.message?.content?.trim() ||
       "Sorry, I couldn't find an answer to that. Please call or email us and we'll help!";
 
-    return Response.json({ reply });
+    return json({ reply });
   } catch {
-    return Response.json({ error: "The assistant is unavailable right now." }, { status: 502 });
+    return json({ error: "The assistant is unavailable right now." }, 502);
   }
 }
